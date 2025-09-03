@@ -19,3 +19,6 @@ for folder in folders:
     subprocess.run(["terraform", "plan"], check=True)
 
     os.chdir("..")
+    
+    
+#this ismodification
