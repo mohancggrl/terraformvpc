@@ -87,3 +87,9 @@ variable "app_server_3_hostname" {
   type        = string
   default     = "MUMBAINODE2"
 }
+
+variable "app_server_4_hostname" {
+  description = "Hostname for the Linux server"
+  type        = string
+  default     = "MUMBAINODE2"
+}
