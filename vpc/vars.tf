@@ -18,3 +18,13 @@ variable "tags" {
     Env   = "dev"
   }
 }
+
+
+variable "tags+" {
+  description = "Map of tags to apply"
+  type        = map(string)
+  default = {
+    Owner = "mohan"
+    Env   = "dev"
+  }
+}
