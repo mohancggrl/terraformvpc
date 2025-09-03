@@ -1,5 +1,3 @@
-#this is my terraform code
-
 # ------------------------
 # Get VPC
 # ------------------------
@@ -214,4 +212,11 @@ resource "aws_instance" "app_server_2" {
   tags = {
     Name = "app-server-2"
   }
+}
+
+
+variable "app_server_4_hostname" {
+  description = "Hostname for the Linux server"
+  type        = string
+  default     = "MUMBAINODE2"
 }
