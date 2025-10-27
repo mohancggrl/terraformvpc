@@ -1,7 +1,7 @@
 variable "region" {
   description = "AWS region"
   type        = string
-  default     = "ap-south-1"
+  default     = "us-west-2"
 }
 
 variable "vpc_cidr" {
@@ -19,12 +19,11 @@ variable "tags" {
   }
 }
 
-
-variable "tags+" {
-  description = "Map of tags to apply"
-  type        = map(string)
-  default = {
-    Owner = "mohan"
-    Env   = "dev"
-  }
-}
+# variable "tags+" {
+#   description = "Map of tags to apply"
+#   type        = map(string)
+#   default = {
+#     Owner = "mohan"
+#     Env   = "dev"
+#   }
+# }
