@@ -1,8 +1,31 @@
 # -------------------------------------------------------------------
+# Data source - Fetch private subnets for given environment
+# -------------------------------------------------------------------
+data "aws_vpc" "selected" {
+  filter {
+    name   = "tag:Name"
+    values = ["${var.name}-vpc"]
+  }
+}
+
+data "aws_subnets" "private" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.selected.id]
+  }
+
+  # Match subnets whose Name tag contains "private"
+  filter {
+    name   = "tag:Name"
+    values = ["*private*"]
+  }
+}
+
+# -------------------------------------------------------------------
 # IAM Role for EKS Cluster
 # -------------------------------------------------------------------
 resource "aws_iam_role" "eks_cluster_role" {
-  name = "eesha-eks-cluster-role"
+  name = "${var.name}-eks-cluster-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -29,13 +52,13 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_AmazonEKSVPCResourceContr
 # -------------------------------------------------------------------
 # EKS Cluster
 # -------------------------------------------------------------------
-resource "aws_eks_cluster" "eesha" {
-  name     = "eesha"
-  version  = "1.29"
+resource "aws_eks_cluster" "eks" {
+  name     = "${var.name}-eks-cluster"
+  version  = "${var.eks_version}"
   role_arn = aws_iam_role.eks_cluster_role.arn
 
   vpc_config {
-    subnet_ids             = var.private_subnet_ids
+    subnet_ids             = data.aws_subnets.private.ids
     endpoint_public_access = true
   }
 
@@ -49,7 +72,7 @@ resource "aws_eks_cluster" "eesha" {
 # IAM Role for EKS Node Group
 # -------------------------------------------------------------------
 resource "aws_iam_role" "eks_nodegroup_role" {
-  name = "eesha-eks-nodegroup-role"
+  name = "${var.name}-eks-nodegroup-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -82,10 +105,10 @@ resource "aws_iam_role_policy_attachment" "AmazonEKS_CNI_Policy" {
 # EKS Managed Node Group
 # -------------------------------------------------------------------
 resource "aws_eks_node_group" "eesha_node_group" {
-  cluster_name    = aws_eks_cluster.eesha.name
-  node_group_name = "eesha-node-group"
+  cluster_name    = aws_eks_cluster.eks.name
+  node_group_name = "${var.name}-node-group"
   node_role_arn   = aws_iam_role.eks_nodegroup_role.arn
-  subnet_ids      = var.private_subnet_ids
+  subnet_ids      = data.aws_subnets.private.ids
 
   scaling_config {
     desired_size = 1
@@ -96,7 +119,7 @@ resource "aws_eks_node_group" "eesha_node_group" {
   instance_types = ["t3.small"]
 
   depends_on = [
-    aws_eks_cluster.eesha,
+    aws_eks_cluster.eks,
     aws_iam_role_policy_attachment.AmazonEKSWorkerNodePolicy,
     aws_iam_role_policy_attachment.AmazonEC2ContainerRegistryReadOnly,
     aws_iam_role_policy_attachment.AmazonEKS_CNI_Policy
@@ -112,26 +135,26 @@ data "aws_caller_identity" "current" {}
 # IAM Role for AWS Load Balancer Controller (IRSA)
 # -------------------------------------------------------------------
 resource "aws_iam_role" "alb_controller" {
-  name = "aws-load-balancer-controller"
+  name = "${var.name}-aws-load-balancer-controller"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [ {
+    Statement = [{
       Effect = "Allow"
       Principal = {
-        Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(aws_eks_cluster.eesha.identity[0].oidc[0].issuer, "https://", "")}"
+        Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(aws_eks_cluster.eks.identity[0].oidc[0].issuer, "https://", "")}"
       }
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${replace(aws_eks_cluster.eesha.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+          "${replace(aws_eks_cluster.eks.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
         }
       }
-    } ]
+    }]
   })
 
   depends_on = [
-    aws_eks_cluster.eesha
+    aws_eks_cluster.eks
   ]
 }
 

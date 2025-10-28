@@ -1,54 +1,73 @@
-# Get AZs
+# -------------------------------------------------------------------
+# Data - Get Availability Zones
+# -------------------------------------------------------------------
 data "aws_availability_zones" "available" {}
 
+# -------------------------------------------------------------------
 # VPC
+# -------------------------------------------------------------------
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
-  tags = merge(var.tags, { Name = "tf-vpc-main" })
+  enable_dns_support   = true
+
+  tags = merge(var.tags, { Name = "${var.name}-vpc" })
 }
 
-# Public subnets
+# -------------------------------------------------------------------
+# Public Subnets
+# -------------------------------------------------------------------
 resource "aws_subnet" "public" {
-  count                   = 2
+  count                   = var.public_subnet_count
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 2, count.index) # /26 each
+  cidr_block              = cidrsubnet(var.vpc_cidr, 2, count.index)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
-  tags = merge(var.tags, { Name = "tf-public-${count.index + 1}" })
+
+  tags = merge(var.tags, { Name = "${var.name}-public-sub-${count.index + 1}" })
 }
 
-# Private subnets
+# -------------------------------------------------------------------
+# Private Subnets
+# -------------------------------------------------------------------
 resource "aws_subnet" "private" {
-  count                   = 2
+  count                   = var.private_subnet_count
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 2, count.index + 2)
+  cidr_block              = cidrsubnet(var.vpc_cidr, 2, count.index + var.public_subnet_count)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = false
-  tags = merge(var.tags, { Name = "tf-private-${count.index + 1}" })
+
+  tags = merge(var.tags, { Name = "${var.name}-private-sub-${count.index + 1}" })
 }
 
+# -------------------------------------------------------------------
 # Internet Gateway
+# -------------------------------------------------------------------
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-  tags   = merge(var.tags, { Name = "tf-igw" })
+
+  tags = merge(var.tags, { Name = "${var.name}-igw" })
 }
 
-# Elastic IP for NAT Gateway
+# -------------------------------------------------------------------
+# NAT Gateway (in first Public Subnet)
+# -------------------------------------------------------------------
 resource "aws_eip" "nat_eip" {
   vpc  = true
-  tags = merge(var.tags, { Name = "tf-nat-eip" })
+  tags = merge(var.tags, { Name = "${var.name}-nat-eip" })
 }
 
-# NAT Gateway in first public subnet
 resource "aws_nat_gateway" "ngw" {
   allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public[0].id
   depends_on    = [aws_internet_gateway.igw]
-  tags          = merge(var.tags, { Name = "tf-ngw" })
+
+  tags = merge(var.tags, { Name = "${var.name}-nat-gw" })
 }
 
-# Public route table
+# -------------------------------------------------------------------
+# Route Tables
+# -------------------------------------------------------------------
 resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.main.id
 
@@ -57,17 +76,15 @@ resource "aws_route_table" "public_rt" {
     gateway_id = aws_internet_gateway.igw.id
   }
 
-  tags = merge(var.tags, { Name = "tf-public-rt" })
+  tags = merge(var.tags, { Name = "${var.name}-public-rt" })
 }
 
-# Associate public subnets
 resource "aws_route_table_association" "public_assoc" {
   count          = length(aws_subnet.public)
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public_rt.id
 }
 
-# Private route table
 resource "aws_route_table" "private_rt" {
   vpc_id = aws_vpc.main.id
 
@@ -76,17 +93,18 @@ resource "aws_route_table" "private_rt" {
     nat_gateway_id = aws_nat_gateway.ngw.id
   }
 
-  tags = merge(var.tags, { Name = "tf-private-rt" })
+  tags = merge(var.tags, { Name = "${var.name}-private-rt" })
 }
 
-# Associate private subnets
 resource "aws_route_table_association" "private_assoc" {
   count          = length(aws_subnet.private)
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private_rt.id
 }
 
+# -------------------------------------------------------------------
 # Outputs
+# -------------------------------------------------------------------
 output "vpc_id" {
   value = aws_vpc.main.id
 }
